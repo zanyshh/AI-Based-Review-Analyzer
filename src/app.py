@@ -1,8 +1,9 @@
 import streamlit as st
+import os
 import pandas as pd
+from groq import Groq
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 
 # -----------------------------
 # Page Config streamlit
@@ -14,156 +15,168 @@ st.set_page_config(
 )
 
 # -----------------------------
-# Train Model on cache to 
+# Train Local Random Forest Model (Cached)
 # -----------------------------
 @st.cache_resource
-def load_and_train_model():
-    # Load your dataset
-    df = pd.read_csv("fake_reviews_dataset.csv")
+def load_and_train_rf():
+    try:
+        df = pd.read_csv("fake_reviews_dataset.csv")
+        X = df["text"]
+        y = df["label"]
 
-    X = df["text"]
-    y = df["label"]
+        vectorizer = TfidfVectorizer(max_features=5000)
+        X_tfidf = vectorizer.fit_transform(X)
 
-    vectorizer = TfidfVectorizer()
-    X_tfidf = vectorizer.fit_transform(X)
+        rf_model = RandomForestClassifier(n_estimators=100, random_state=42, n_jobs=-1)
+        rf_model.fit(X_tfidf, y)
+        
+        return vectorizer, rf_model
+    except FileNotFoundError:
+        return None, None
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_tfidf, y, test_size=0.2, random_state=42
-    )
-
-    model = LogisticRegression(max_iter=1000)
-    model.fit(X_train, y_train)
-    
-    return vectorizer, model
-
-# Try to load the model, catch error if CSV is missing
-try:
-    vectorizer, model = load_and_train_model()
-except FileNotFoundError:
-    st.error("Error: 'fake_reviews_dataset.csv' not found. Please place it in the same directory.")
-    st.stop()
+rf_vectorizer, rf_model = load_and_train_rf()
 
 # -----------------------------
-# Custom Cyberpunk Theme CSS
+# Groq API Scanner (Consensus Logic)
+# -----------------------------
+try:
+    client = Groq(api_key="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")
+except Exception as e:
+    st.error(f"Initialization Failed: {str(e)}")
+    st.stop()
+
+def analyze_hybrid_consensus(review_text, rf_prediction):
+    """
+    Blends the local model's output with Groq's language capabilities 
+    to make a final consensus prediction.
+    """
+    rf_status = "REAL/AUTHENTIC" if rf_prediction in ["OR", 1, "real"] else "FAKE/SUSPICIOUS"
+    
+    system_prompt = (
+        "You are a master cybersecurity analysis node synthesizing a hybrid fraud scan.\n"
+        f"Our local hardware array flagged this review as mathematically: {rf_status}.\n\n"
+        "Analyze the text yourself, cross-reference it with the local hardware flag, and make the FINAL absolute decision. "
+        "Your response MUST start with either '[STATUS: REAL]' or '[STATUS: FAKE]'.\n\n"
+        "Directly below the status tag, output exactly 3 bullet points:\n"
+        "1. Direct confirmation of whether your cloud assessment agreed or disagreed with the local Random Forest.\n"
+        "2. A breakdown of the structural anomalies, syntax, or realism gaps found in the text.\n"
+        "3. A final risk level score (0% to 100%)."
+    )
+    
+    try:
+        completion = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Review Text to evaluate:\n\"\"\"\n{review_text}\n\"\"\""}
+            ],
+            temperature=0.1,
+            max_tokens=300
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        return f"ERROR: Communication breach with Groq API. Details: {str(e)}"
+
+# -----------------------------
+# Exact Cyberpunk 2077 Theme CSS
 # -----------------------------
 st.markdown("""
 <style>
-/* BACKGROUND */
 .stApp {
-    background: #080808;
+    background: #030303;
     background-image:
-    radial-gradient(circle at 15% 20%, rgba(0,255,255,.08), transparent 25%),
-    radial-gradient(circle at 85% 75%, rgba(255,210,0,.08), transparent 30%);
-    color: white;
+        linear-gradient(rgba(252, 238, 9, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(252, 238, 9, 0.03) 1px, transparent 1px),
+        radial-gradient(circle at 15% 20%, rgba(0, 240, 255, 0.1), transparent 30%),
+        radial-gradient(circle at 85% 75%, rgba(255, 0, 85, 0.1), transparent 35%);
+    background-size: 20px 20px, 20px 20px, 100% 100%, 100% 100%;
+    color: #FFFFFF;
+    font-family: 'Courier New', Courier, monospace;
 }
 
-/* Hide Streamlit UI elements safely */
 header, footer, #MainMenu {
     visibility: hidden;
 }
 
-/* MAIN PANEL CONTAINER */
-.cyber-container {
-    background: #101010;
-    border: 2px solid #FFD400;
-    padding: 35px;
-    border-radius: 8px;
-    box-shadow: 0 0 8px #FFD400, 0 0 30px rgba(255,212,0,.25);
-    margin-bottom: 25px;
-}
-
-/* TYPOGRAPHY */
 .title {
-    font-size: 46px;
+    font-size: 44px;
     font-weight: 900;
-    letter-spacing: 3px;
-    color: #FFD400;
+    letter-spacing: 4px;
+    color: #FCEE09;
     text-align: center;
-    text-shadow: 0 0 8px #FFD400, 0 0 18px #FFD400;
-    margin-bottom: 5px;
+    text-shadow: 0 0 10px rgba(252, 238, 9, 0.6), 3px 3px 0px #FF0055;
+    margin-bottom: 2px;
 }
 
 .subtitle {
     text-align: center;
-    font-size: 16px;
-    letter-spacing: 2px;
-    color: #00F5FF;
-    margin-bottom: 30px;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 3px;
+    color: #00F0FF;
+    text-shadow: 0 0 5px rgba(0, 240, 255, 0.5);
+    margin-bottom: 40px;
 }
 
-/* TEXT AREA STYLING */
 .stTextArea label {
-    color: #FFD400 !important;
-    font-weight: bold;
+    color: #FCEE09 !important;
+    font-weight: 800;
+    letter-spacing: 1px;
 }
 
 .stTextArea div[data-baseweb="textarea"] {
-    background: #0d0d0d !important;
-    border: 2px solid #00F5FF !important;
-    border-radius: 8px !important;
-    transition: .3s;
+    background: #0a0b0d !important;
+    border: 2px solid #00F0FF !important;
+    border-radius: 0px !important;
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
 }
 
 .stTextArea div[data-baseweb="textarea"]:focus-within {
-    border: 2px solid #FFD400 !important;
-    box-shadow: 0 0 15px #FFD400, 0 0 40px rgba(255,212,0,.3);
+    border: 2px solid #FCEE09 !important;
+    box-shadow: 0 0 15px rgba(252, 238, 9, 0.4);
 }
 
 textarea {
     background: transparent !important;
-    color: #00F5FF !important;
-    font-size: 17px;
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
+    color: #00F0FF !important;
+    font-size: 16px;
 }
 
-/* BUTTON STYLING */
 .stButton > button {
     width: 100%;
-    background: #FFD400;
-    color: black !important;
+    background: #FCEE09;
+    color: #000000 !important;
     font-size: 18px;
     font-weight: 900;
-    letter-spacing: 2px;
+    letter-spacing: 3px;
     border: none;
-    border-radius: 6px;
-    padding: 15px;
-    transition: .25s;
-    box-shadow: 0 0 10px #FFD400, 0 0 25px rgba(255,212,0,.45);
+    border-radius: 0px;
+    padding: 14px;
+    clip-path: polygon(10px 0%, 100% 0%, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0% 100%, 0% 10px);
+    transition: 0.2s;
+    border-right: 4px solid #FF0055;
 }
 
 .stButton > button:hover {
-    background: #00F5FF !important;
-    color: black !important;
-    transform: scale(1.02);
-    box-shadow: 0 0 10px #00F5FF, 0 0 35px rgba(0,245,255,.6);
+    background: #00F0FF !important;
+    box-shadow: 0 0 20px rgba(0, 240, 255, 0.6);
+    border-right: 4px solid #FCEE09;
 }
 
-.stButton > button:active {
-    background: #00F5FF !important;
-    color: black !important;
-}
-
-/* ALERT CUSTOMIZATIONS */
 .stSuccess {
-    background: #0c1b12 !important;
-    border-left: 6px solid #00ff66 !important;
-    color: #00ff66 !important;
+    background: rgba(0, 240, 255, 0.07) !important;
+    border: 1px solid #00F0FF !important;
+    border-left: 6px solid #00F0FF !important;
+    color: #00F0FF !important;
+    border-radius: 0px;
 }
 
 .stError {
-    background: #200707 !important;
-    border-left: 6px solid #ff003c !important;
-    color: #ff4d6d !important;
-}
-
-/* SCROLLBAR */
-::-webkit-scrollbar {
-    width: 8px;
-}
-::-webkit-scrollbar-thumb {
-    background: #FFD400;
+    background: rgba(255, 0, 85, 0.07) !important;
+    border: 1px solid #FF0055 !important;
+    border-left: 6px solid #FF0055 !important;
+    color: #FF0055 !important;
+    border-radius: 0px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -172,12 +185,8 @@ textarea {
 # UI Components & App Logic
 # -----------------------------
 
-# Render Title Header
-st.markdown('<div class="title">🤖 FAKE REVIEW DETECTOR</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">AI-POWERED REVIEW DETECTION SERVICE</div>', unsafe_allow_html=True)
-
-# Wrap your input form inside the custom .cyber-container class div
-st.markdown('<div class="cyber-container">', unsafe_allow_html=True)
+st.markdown('<div class="title">🤖 ReviewGuardian AI</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">AI BASED REVIEW DETECTION SERVICE</div>', unsafe_allow_html=True)
 
 user_review = st.text_area(
     "PASTE THE REVIEW TEXT BELOW:", 
@@ -185,28 +194,30 @@ user_review = st.text_area(
     height=150
 )
 
-# Create space or margin before the action button
 st.write("")
-analyze_button = st.button("RUN SCANNERS")
+analyze_button = st.button("RUN HYBRID SCAN")
 
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Process Action
 if analyze_button:
     if user_review.strip() == "":
-        st.warning("Please enter some text before running the scan.")
+        st.warning("System requires explicit input text before running scanners.")
     else:
-        # Transform input using the trained TfidfVectorizer
-        processed_input = vectorizer.transform([user_review])
-        
-        # Predict outcome
-        prediction = model.predict(processed_input)[0]
-        
-        # Display custom styled response based on your dataset labels
-        # Note: Change 'CG'/'OR' or 1/0 to match the exact labels in your CSV
-        if prediction == "OR" or prediction == 1 or str(prediction).lower() == "real":
-            st.success("###  Authentic Review\n\nThis text patterns match organic, real-user behaviors.")
-        else:
-            st.error("### ❌ Suspicious Review\n\nHigh probability of computer-generated or coordinated fraudulent text structure.")
-
+        with st.spinner("Synthesizing local array and network vectors..."):
+            # Step 1: Query Local Hardware (Random Forest)
+            if rf_model is not None and rf_vectorizer is not None:
+                vec_input = rf_vectorizer.transform([user_review])
+                rf_prediction = rf_model.predict(vec_input)[0]
+            else:
+                rf_prediction = "unknown"  # Graceful fallback if dataset is missing
             
+            # Step 2: Query Cloud Network Matrix with Local Context
+            consensus_response = analyze_hybrid_consensus(user_review, rf_prediction)
+        
+        # Step 3: Output Clean Combined Interface Readout
+        if "ERROR" in consensus_response:
+            st.error(consensus_response)
+        elif "[STATUS: REAL]" in consensus_response:
+            clean_text = consensus_response.replace("[STATUS: REAL]", "").strip()
+            st.success(f"### ✔ AUTHENTIC REVIEW\n\n{clean_text}")
+        else:
+            clean_text = consensus_response.replace("[STATUS: FAKE]", "").strip()
+            st.error(f"### ❌ SUSPICIOUS TEXT DETECTED\n\n{clean_text}")
